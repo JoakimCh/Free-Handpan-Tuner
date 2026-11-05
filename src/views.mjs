@@ -65,7 +65,7 @@ export function listenView(state) {
   return `${pageTitle(report.instrumentId ? 'CHECK YOUR HANDPAN' : 'DISCOVER YOUR HANDPAN', h(report.instrumentName), `<button class="secondary compact" data-action="new-check">New check</button>`)}
     <div class="session-meta"><span>${report.input?.kind === 'practice' || state.sourceKind === 'practice' ? 'Practice audio' : 'Microphone'} · A4 = ${report.reference} Hz</span><span id="save-state">${state.dirty ? 'Unsaved changes' : 'Draft saved on this device'}</span></div>
     ${state.dirty ? `<div class="notice error">This check has unsaved changes. <button data-action="retry-save">Retry save</button> <button data-action="export">Back up now</button></div>` : ''}
-    <div class="listen-layout"><section class="tuner card" aria-label="Live tuner">
+    <div class="listen-layout" data-report-id="${h(report.id)}"><section class="tuner card" aria-label="Live tuner">
       <div class="listening-state"><span class="status-dot ${state.listening ? 'pulse' : ''}"></span><span id="live-state">${state.listening ? 'Listening' : 'Ready when you are'}</span></div>
       <div class="live-pitch"><span id="live-note">${named ? h(named.name.replace(/-?\d+$/, '')) : '—'}</span><span id="live-octave">${named ? Math.floor(named.midi / 12) - 1 : ''}</span></div>
       <p id="live-frequency" class="live-frequency">${last ? hz(last.frequency) : 'Play one field at a time'}</p>

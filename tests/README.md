@@ -35,3 +35,12 @@ best-strike selection and reports still need implementation. A periodicity
 estimate can confuse a missing fundamental or overlapping fields. This suite
 establishes repeatable behavior for the simulated cases it contains. Real
 microphones and real handpans require separate validation.
+
+The application adds a streaming strike collector and spectral checks around
+this initial estimator. `app-tests.mjs` covers the streaming path, upper partials,
+ambiguous fundamentals, IndexedDB transactions, stale writes and import
+idempotence. It exercises discovery, profile saving, reports, history, microphone
+recovery and offline caching through the app’s normal UI. Automated runs use a
+temporary browser profile and Chrome’s fake microphone. Manual runs may request
+microphone permission. The integration flow cleans up its uniquely named test
+records. The runner also reopens the app with network access disabled.

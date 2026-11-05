@@ -1,34 +1,20 @@
 // Dependency-free automation of the same test page a player can open manually.
 // Chrome's debugging pipe stays local to this process and needs no open port.
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createStaticServer } from '../tools/serve.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const server = createServer(async (request, response) => {
-  const path = resolve(root, '.' + new URL(request.url, 'http://localhost').pathname);
-  if (!path.startsWith(root + sep)) {
-    response.writeHead(403).end();
-    return;
-  }
-  try {
-    const content = await readFile(path);
-    const type = extname(path) === '.mjs' ? 'text/javascript' : 'text/html';
-    response.writeHead(200, { 'Content-Type': type }).end(content);
-  } catch {
-    response.writeHead(404).end();
-  }
-});
+const server = createStaticServer();
 
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const profile = await mkdtemp(join(tmpdir(), 'handpan-tests-'));
 const chrome = spawn(process.env.CHROME_BIN || 'google-chrome', [
   '--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--remote-debugging-pipe', `--user-data-dir=${profile}`, 'about:blank',
+  '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream',
 ], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
 
 let sequence = 0;
@@ -84,7 +70,7 @@ try {
     url: `http://127.0.0.1:${server.address().port}/tests/index.html?autorun`,
   });
   const { sessionId } = await command('Target.attachToTarget', { targetId, flatten: true });
-  const deadline = Date.now() + 120000;
+  const deadline = Date.now() + 180000;
   let report;
   while (Date.now() < deadline) {
     const { result, exceptionDetails } = await command('Runtime.evaluate', {
@@ -98,6 +84,39 @@ try {
   }
   console.log(report?.text);
   if (report?.status !== 'passed') process.exitCode = 1;
+  if (report?.status === 'passed') {
+    await command('Network.enable', {}, sessionId);
+    await command('Network.emulateNetworkConditions', {
+      offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0,
+    }, sessionId);
+    await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/index.html#library` }, sessionId);
+    let offline;
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      const { result } = await command('Runtime.evaluate', {
+        expression: `({ready: document.documentElement.dataset.appReady, title: document.querySelector('h1')?.textContent, error: document.querySelector('#error')?.hidden === false})`,
+        returnByValue: true,
+      }, sessionId);
+      offline = result.value;
+      if (offline.ready === 'true' && offline.title === 'Handpans') break;
+      await delay(100);
+    }
+    if (offline?.ready !== 'true' || offline.error) throw new Error(`Offline reopen failed ${JSON.stringify(offline)}`);
+    console.log('PASS · App reopens with the network disabled');
+    await command('Network.emulateNetworkConditions', {
+      offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+    }, sessionId);
+    if (process.env.HANDPAN_SCREENSHOTS === '1') {
+      await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/index.html#listen` }, sessionId);
+      await delay(500);
+      for (const [label, width, height] of [['desktop', 1440, 1000], ['phone', 390, 844]]) {
+        await command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 640 }, sessionId);
+        await delay(100);
+        const screenshot = await command('Page.captureScreenshot', { format: 'png' }, sessionId);
+        console.log(`SCREENSHOT_${label} ${screenshot.data}`);
+      }
+    }
+  }
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

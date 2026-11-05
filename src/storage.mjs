@@ -49,11 +49,13 @@ class Store {
   }
 
   async save(name, record) {
-    const transaction = this.db.transaction(name, 'readwrite');
+    const names = name === 'reports' ? ['instruments', 'reports'] : [name];
+    const transaction = this.db.transaction(names, 'readwrite');
     const done = transactionDone(transaction);
     const store = transaction.objectStore(name);
     let saved;
     let conflict = false;
+    let missingInstrument = false;
     const request = store.get(record.id);
     request.onsuccess = () => {
       const previous = request.result;
@@ -62,17 +64,30 @@ class Store {
         transaction.abort();
         return;
       }
-      saved = { ...structuredClone(record), revision: (previous?.revision ?? 0) + 1,
-        updatedAt: new Date().toISOString() };
-      store.put(saved);
+      const write = () => {
+        saved = { ...structuredClone(record), revision: (previous?.revision ?? 0) + 1,
+          updatedAt: new Date().toISOString() };
+        store.put(saved);
+      };
+      if (name === 'reports' && record.instrumentId) {
+        const instrument = transaction.objectStore('instruments').get(record.instrumentId);
+        instrument.onsuccess = () => {
+          if (!instrument.result) { missingInstrument = true; transaction.abort(); return; }
+          write();
+        };
+      } else write();
     };
     try { await done; }
-    catch (error) { if (conflict) throw new ConflictError(); throw error; }
+    catch (error) {
+      if (conflict) throw new ConflictError();
+      if (missingInstrument) throw new Error('This handpan was removed in another tab. Export this draft, then reload saved records.');
+      throw error;
+    }
     return saved;
   }
 
   async remove(name, id, revision) {
-    const names = name === 'instruments' ? ['instruments', 'reports'] : [name];
+    const names = ['instruments', 'reports'];
     const transaction = this.db.transaction(names, 'readwrite');
     const done = transactionDone(transaction);
     let conflict = false;
@@ -80,6 +95,15 @@ class Store {
     request.onsuccess = () => {
       if ((request.result?.revision ?? 0) !== revision) { conflict = true; transaction.abort(); return; }
       transaction.objectStore(name).delete(id);
+      if (name === 'reports' && request.result?.instrumentId) {
+        const instrument = transaction.objectStore('instruments').get(request.result.instrumentId);
+        instrument.onsuccess = () => {
+          if (instrument.result?.baselineId === id) transaction.objectStore('instruments').put({
+            ...instrument.result, baselineId: null, revision: instrument.result.revision + 1,
+            updatedAt: new Date().toISOString(),
+          });
+        };
+      }
       if (name === 'instruments') {
         const cursorRequest = transaction.objectStore('reports').openCursor();
         cursorRequest.onsuccess = () => {
