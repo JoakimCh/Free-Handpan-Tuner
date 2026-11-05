@@ -24,10 +24,14 @@ function instrument() {
 
 export async function runAppTests(onResult = () => {}) {
   const results = [];
+  let uiDocument;
   async function test(name, body) {
     let result;
     try { result = { name, passed: true, details: await body() ?? 'Passed' }; }
-    catch (error) { result = { name, passed: false, details: error.message }; }
+    catch (error) {
+      const visible = uiDocument?.();
+      result = { name, passed: false, details: `${error.message}${visible ? ` · App message ${visible.querySelector('#error')?.textContent || '(none)'} · View ${visible.querySelector('main')?.innerText.slice(0, 1000)}` : ''}` };
+    }
     results.push(result); onResult(result);
     return result.passed;
   }
@@ -120,6 +124,7 @@ export async function runAppTests(onResult = () => {}) {
   let firstReport;
   const appName = `Integration ${crypto.randomUUID().slice(0, 8)}`;
   const doc = () => frame.contentDocument;
+  uiDocument = doc;
   const click = selector => {
     const button = doc().querySelector(selector);
     assert(button && !button.disabled, `Control unavailable ${selector}`);

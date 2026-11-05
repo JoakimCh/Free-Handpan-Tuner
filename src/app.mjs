@@ -19,6 +19,7 @@ let toastTimer;
 let notesTimer;
 let installPrompt;
 let registration;
+let applyingUpdate = false;
 let routeKey = '';
 
 const capture = new AudioCapture(
@@ -533,7 +534,7 @@ const actions = {
   update: async () => {
     await stopListening();
     if (state.dirty) await persistDraft();
-    if (registration?.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    if (registration?.waiting) { applyingUpdate = true; registration.waiting.postMessage({ type: 'SKIP_WAITING' }); }
     else location.reload();
   },
   'dismiss-error': () => { document.querySelector('#error').hidden = true; },
@@ -650,8 +651,9 @@ async function setupOffline() {
     return;
   }
   try {
+    const hadController = Boolean(navigator.serviceWorker.controller);
     registration = await navigator.serviceWorker.register(new URL('../sw.js', import.meta.url), { scope: new URL('../', import.meta.url).pathname });
-    const updateReady = () => { document.querySelector('#update-banner').hidden = !registration.waiting; };
+    const updateReady = () => { document.querySelector('#update-banner').hidden = !hadController || !registration.waiting; };
     updateReady();
     registration.addEventListener('updatefound', () => {
       const installing = registration.installing;
@@ -670,7 +672,7 @@ async function setupOffline() {
     if (status) status.textContent = state.cacheStatus;
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (registration.active && document.querySelector('#update-banner').hidden === false && !reloading) {
+      if (applyingUpdate && registration.active && !reloading) {
         reloading = true; location.reload();
       }
     });
