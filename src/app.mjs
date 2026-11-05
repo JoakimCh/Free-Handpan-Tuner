@@ -179,22 +179,22 @@ async function toggleListening() {
     await enqueue(async () => {
       if (attempt !== audioAttempt || !capture.running || currentRoute().page !== 'listen') return;
       try {
-      const hasTakes = Object.values(state.draft.readings).some(value => value.takes.length);
-      if (hasTakes && (JSON.stringify(state.draft.input) !== JSON.stringify(input) || state.draft.analysisVersion !== ANALYSIS_VERSION)) {
-        const instrument = state.instruments.find(item => item.id === state.draft.instrumentId);
-        state.draft = createReport(instrument, state.settings);
-        state.undo = [];
-        state.lastMeasurement = null;
-        toast('A new check was started for this input. The earlier draft is saved.');
-      }
-      state.draft.input = input;
-      state.draft.analysisVersion = ANALYSIS_VERSION;
-      await persistDraft();
-      state.listening = true;
-      state.starting = false;
-      capture.setRatios(state.draft.fields.find(field => field.id === state.selectedField)?.ratios ?? [2, 3]);
-      await refreshDevices();
-      render();
+        const hasTakes = Object.values(state.draft.readings).some(value => value.takes.length);
+        if (hasTakes && (JSON.stringify(state.draft.input) !== JSON.stringify(input) || state.draft.analysisVersion !== ANALYSIS_VERSION)) {
+          const instrument = state.instruments.find(item => item.id === state.draft.instrumentId);
+          state.draft = createReport(instrument, state.settings);
+          state.undo = [];
+          state.lastMeasurement = null;
+          toast('A new check was started for this input. The earlier draft is saved.');
+        }
+        state.draft.input = input;
+        state.draft.analysisVersion = ANALYSIS_VERSION;
+        await persistDraft();
+        state.listening = true;
+        state.starting = false;
+        capture.setRatios(state.draft.fields.find(field => field.id === state.selectedField)?.ratios ?? [2, 3]);
+        await refreshDevices();
+        render();
       } catch (error) {
         await stopListening();
         throw error;

@@ -74,7 +74,7 @@ try {
   let report;
   while (Date.now() < deadline) {
     const { result, exceptionDetails } = await command('Runtime.evaluate', {
-      expression: `({status: document.documentElement.dataset.testStatus, text: document.body?.innerText})`,
+      expression: `({status: document.documentElement?.dataset.testStatus, text: document.body?.innerText})`,
       returnByValue: true,
     }, sessionId);
     if (exceptionDetails) throw new Error(exceptionDetails.text);
@@ -94,7 +94,7 @@ try {
     const deadline = Date.now() + 20000;
     while (Date.now() < deadline) {
       const { result } = await command('Runtime.evaluate', {
-        expression: `({ready: document.documentElement.dataset.appReady, title: document.querySelector('h1')?.textContent, error: document.querySelector('#error')?.hidden === false})`,
+        expression: `({ready: document.documentElement?.dataset.appReady, title: document.querySelector('h1')?.textContent, error: document.querySelector('#error')?.hidden === false})`,
         returnByValue: true,
       }, sessionId);
       offline = result.value;

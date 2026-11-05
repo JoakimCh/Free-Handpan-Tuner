@@ -120,6 +120,7 @@ export async function runAppTests(onResult = () => {}) {
   const originalReports = new Set(original.reports.map(report => report.id));
   const originalInstruments = new Set(original.instruments.map(item => item.id));
   const createdReports = new Set();
+  const createdProfiles = new Set();
   let appProfile;
   let firstReport;
   const appName = `Integration ${crypto.randomUUID().slice(0, 8)}`;
@@ -130,7 +131,7 @@ export async function runAppTests(onResult = () => {}) {
       frame.addEventListener('load', resolve, { once: true });
       frame.src = `../index.html?integration=${crypto.randomUUID()}#${hash}`;
     });
-    await waitFor(() => doc()?.documentElement.dataset.appReady === 'true', 'App navigation did not finish');
+    await waitFor(() => doc()?.documentElement?.dataset.appReady === 'true', 'App navigation did not finish');
   };
   const click = selector => {
     const button = doc().querySelector(selector);
@@ -146,7 +147,7 @@ export async function runAppTests(onResult = () => {}) {
   };
   try {
     const loaded = await test('Phone interface loads without horizontal overflow', async () => {
-      await waitFor(() => doc()?.documentElement.dataset.appReady === 'true', 'App did not open');
+      await waitFor(() => doc()?.documentElement?.dataset.appReady === 'true', 'App did not open');
       assert(doc().documentElement.scrollWidth <= 392, 'App overflows a phone viewport');
       assert(doc().querySelector('h1')?.textContent.includes('sound'), 'Welcome view missing');
     });
@@ -161,6 +162,12 @@ export async function runAppTests(onResult = () => {}) {
       click('[data-action="play"][data-midi="50"]');
       await waitFor(() => doc().querySelector('.field-row'), 'No field captured from practice audio');
       assert(doc().querySelector('.field-row').textContent.includes('D3'), 'Wrong discovered note');
+      for (let repeat = 2; repeat <= 3; repeat++) {
+        await delay(350);
+        click('[data-action="play"][data-midi="50"]');
+        await waitFor(() => doc().querySelector('.field-row')?.textContent.includes(`${repeat} strikes`), 'Repeat strike was not retained');
+      }
+      assert(doc().querySelectorAll('.field-row').length === 1, 'Repeats created duplicate fields');
       click('[data-action="toggle-listen"]');
       await waitFor(() => doc().querySelector('[data-action="toggle-listen"]')?.textContent.includes('Start'), 'Audio did not stop');
     });
@@ -174,6 +181,7 @@ export async function runAppTests(onResult = () => {}) {
       await waitFor(() => doc().querySelector('.report-measurements'), 'Report did not open');
       const loaded = await appStore.load();
       appProfile = loaded.instruments.find(item => item.name === appName);
+      if (appProfile) createdProfiles.add(appProfile.id);
       firstReport = loaded.reports.find(report => report.instrumentId === appProfile?.id);
       assert(appProfile && firstReport?.status === 'final', 'Linked final report missing');
       assert(firstReport.input.kind === 'practice', 'Practice source was not preserved');
@@ -190,7 +198,7 @@ export async function runAppTests(onResult = () => {}) {
         frame.addEventListener('load', resolve, { once: true });
         frame.contentWindow.location.reload();
       });
-      await waitFor(() => doc()?.documentElement.dataset.appReady === 'true' && doc().querySelector('.report-measurements'), 'Report did not reopen');
+      await waitFor(() => doc()?.documentElement?.dataset.appReady === 'true' && doc().querySelector('.report-measurements'), 'Report did not reopen');
       assert(doc().querySelector('#report-notes').value === '<script>plain text</script>', 'Notes did not survive reload');
       assert(!doc().querySelector('script:not([src])'), 'User text became executable markup');
     });
@@ -232,6 +240,44 @@ export async function runAppTests(onResult = () => {}) {
       assert(doc().querySelector('[data-action="toggle-listen"]').textContent.includes('Start'), 'Start did not recover');
       devices.getUserMedia = original;
     });
+    await test('Profile editing supports unisons and preserves historical targets', async () => {
+      await navigate('library');
+      click(`[data-action="edit-instrument"][data-id="${appProfile.id}"]`);
+      await waitFor(() => doc().querySelector('#editor-form'), 'Profile editor missing');
+      fill('#instrument-reference', '432');
+      click('[data-action="editor-add"]');
+      await waitFor(() => doc().querySelectorAll('[data-editor-field]').length === 2, 'Additional field missing');
+      const fields = doc().querySelectorAll('[data-editor-field]');
+      fields[1].querySelector('.field-side').value = 'bottom';
+      fields[1].querySelector('.field-label').value = 'D3 underside';
+      doc().querySelector('#editor-form').requestSubmit();
+      await waitFor(() => !doc().querySelector('#dialog').open, 'Profile did not save');
+      const records = await appStore.load();
+      const saved = records.instruments.find(item => item.id === appProfile.id);
+      assert(saved.fields.length === 2 && saved.fields[1].side === 'bottom', 'Unison or underside field missing');
+      assert(saved.fields[0].targetHz !== firstReport.fields[0].targetHz, 'Profile reference did not change');
+      const historical = records.reports.find(item => item.id === firstReport.id);
+      assert(historical.fields[0].targetHz === firstReport.fields[0].targetHz, 'Historical target changed');
+    });
+    await test('Settings persist and backup import works through the UI', async () => {
+      await navigate('settings');
+      fill('#tolerance', '8'); fill('#margin', '4');
+      doc().querySelector('#settings-form').requestSubmit();
+      await waitFor(() => doc().querySelector('#toast').textContent.includes('Settings saved'), 'Settings did not save');
+      assert((await appStore.load()).settings.tolerance === 8, 'Stored settings differ');
+      const restoredProfile = instrument();
+      restoredProfile.name = `${appName} restored`;
+      const restoredReport = createReport(restoredProfile);
+      createdProfiles.add(restoredProfile.id);
+      const backup = createBackup([restoredProfile], [restoredReport]);
+      const files = new frame.contentWindow.DataTransfer();
+      files.items.add(new frame.contentWindow.File([backup], 'backup.json', { type: 'application/json' }));
+      const input = doc().querySelector('#import-file');
+      input.files = files.files;
+      input.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
+      await waitFor(() => doc().querySelector('#toast').textContent.includes('Restored 1 handpans'), 'Backup did not restore');
+      assert((await appStore.all('instruments')).some(item => item.id === restoredProfile.id), 'Restored instrument missing');
+    });
     await test('Offline cache contains the entire audio pipeline', async () => {
       await frame.contentWindow.navigator.serviceWorker.ready;
       const keys = await caches.keys();
@@ -244,7 +290,7 @@ export async function runAppTests(onResult = () => {}) {
     frame.remove();
     const current = await appStore.load();
     // Unique IDs limit cleanup to the records this UI flow created.
-    for (const item of current.instruments.filter(item => !originalInstruments.has(item.id) && item.name === appName)) {
+    for (const item of current.instruments.filter(item => !originalInstruments.has(item.id) && (item.name === appName || createdProfiles.has(item.id)))) {
       await appStore.remove('instruments', item.id, item.revision);
     }
     const remaining = await appStore.all('reports');
