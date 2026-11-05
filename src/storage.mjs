@@ -259,6 +259,9 @@ function report(value) {
       if (result.input[key] !== null && typeof result.input[key] !== 'boolean') throw new Error('Invalid input setting');
     }
   }
+  if (!value.readings || typeof value.readings !== 'object' || Array.isArray(value.readings)) throw new Error('Invalid readings');
+  const knownFields = new Set(result.fields.map(item => item.id));
+  if (Object.keys(value.readings).some(id => !knownFields.has(id))) throw new Error('A reading has no matching field');
   for (const item of result.fields) {
     const reading = Object.hasOwn(value.readings ?? {}, item.id) ? value.readings[item.id] : null;
     if (!reading) continue;

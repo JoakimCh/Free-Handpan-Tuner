@@ -30,7 +30,9 @@ export class AudioCapture {
         this.stream = stream;
         const track = stream.getAudioTracks()[0];
         const settings = track.getSettings();
-        track.onended = () => this.interrupt('The microphone disconnected. Start again to select an input.');
+        track.onended = () => {
+          if (generation === this.generation) this.interrupt('The microphone disconnected. Start again to select an input.');
+        };
         this.source = context.createMediaStreamSource(stream);
         descriptor = { kind, sampleRate: context.sampleRate, label: track.label,
           echoCancellation: settings.echoCancellation ?? null, noiseSuppression: settings.noiseSuppression ?? null,
@@ -49,16 +51,20 @@ export class AudioCapture {
         if (data.type === 'level') this.onLevel(data);
         if (data.type === 'error') this.interrupt(data.message);
       };
-      this.worker.onerror = () => this.interrupt('The analysis worker stopped. Please start listening again.');
+      this.worker.onerror = () => {
+        if (generation === this.generation) this.interrupt('The analysis worker stopped. Please start listening again.');
+      };
       this.worker.postMessage({ type: 'init', sampleRate: context.sampleRate });
       this.worklet = new AudioWorkletNode(context, 'handpan-capture');
-      this.worklet.onprocessorerror = () => this.interrupt('Audio capture stopped. Please start again.');
+      this.worklet.onprocessorerror = () => {
+        if (generation === this.generation) this.interrupt('Audio capture stopped. Please start again.');
+      };
       this.worklet.port.onmessage = ({ data }) => {
         this.worker?.postMessage({ type: 'samples', samples: data }, [data.buffer]);
       };
       this.source.connect(this.worklet).connect(context.destination);
       context.onstatechange = () => {
-        if (this.running && context.state !== 'running') this.interrupt('Audio was interrupted. Tap Start listening to resume.');
+        if (generation === this.generation && this.running && context.state !== 'running') this.interrupt('Audio was interrupted. Tap Start listening to resume.');
       };
       this.running = true;
       if (navigator.wakeLock) {
@@ -69,7 +75,10 @@ export class AudioCapture {
       }
       return descriptor;
     } catch (error) {
-      await this.stop();
+      // A cancelled permission request can resolve after a newer capture starts.
+      // Clean up only the context owned by this start attempt.
+      if (this.context === context) await this.stop();
+      else await context.close().catch(() => {});
       throw error;
     }
   }

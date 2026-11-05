@@ -20,6 +20,7 @@ let notesTimer;
 let installPrompt;
 let registration;
 let applyingUpdate = false;
+let audioAttempt = 0;
 let routeKey = '';
 
 const capture = new AudioCapture(
@@ -33,6 +34,7 @@ const capture = new AudioCapture(
     if (status) status.textContent = { calibrating: 'Listening to the room…', capturing: 'Capturing the ring…', listening: 'Listening for a strike' }[level.state];
   },
   message => {
+    audioAttempt++;
     state.listening = false;
     state.starting = false;
     state.captureMessage = message;
@@ -122,6 +124,7 @@ function rememberUndo() {
 }
 
 async function stopListening() {
+  audioAttempt++;
   state.listening = false;
   state.starting = false;
   await capture.stop();
@@ -165,6 +168,7 @@ async function resumeReport(id) {
 async function toggleListening() {
   if (state.listening || state.starting) { await stopListening(); render(); return; }
   if (!state.draft) return;
+  const attempt = ++audioAttempt;
   state.starting = true;
   state.captureMessage = '';
   document.querySelector('#error').hidden = true;
@@ -173,7 +177,8 @@ async function toggleListening() {
     // start() creates and resumes AudioContext within the button's activation.
     const input = await capture.start(state.sourceKind, state.deviceId);
     await enqueue(async () => {
-      if (!capture.running || currentRoute().page !== 'listen') return;
+      if (attempt !== audioAttempt || !capture.running || currentRoute().page !== 'listen') return;
+      try {
       const hasTakes = Object.values(state.draft.readings).some(value => value.takes.length);
       if (hasTakes && (JSON.stringify(state.draft.input) !== JSON.stringify(input) || state.draft.analysisVersion !== ANALYSIS_VERSION)) {
         const instrument = state.instruments.find(item => item.id === state.draft.instrumentId);
@@ -190,8 +195,13 @@ async function toggleListening() {
       capture.setRatios(state.draft.fields.find(field => field.id === state.selectedField)?.ratios ?? [2, 3]);
       await refreshDevices();
       render();
+      } catch (error) {
+        await stopListening();
+        throw error;
+      }
     });
   } catch (error) {
+    if (attempt !== audioAttempt) return;
     state.starting = false;
     state.listening = false;
     if (error.name !== 'AbortError') showError(audioError(error));
@@ -516,7 +526,10 @@ const actions = {
   print: () => { document.querySelectorAll('.partial-details').forEach(details => { details.open = true; }); window.print(); },
   'share-report': async button => {
     const report = state.reports.find(item => item.id === button.dataset.id);
-    const text = textReport(report);
+    const earlier = state.reports.filter(item => report.instrumentId && item.instrumentId === report.instrumentId
+      && item.status === 'final' && item.createdAt < report.createdAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const previous = earlier.find(item => item.id === state.compareId) ?? earlier[0];
+    const text = textReport(report, previous);
     if (navigator.share) {
       try { await navigator.share({ title: `${report.instrumentName} tuning report`, text }); }
       catch (error) { if (error.name !== 'AbortError') download('handpan-report.txt', text, 'text/plain'); }

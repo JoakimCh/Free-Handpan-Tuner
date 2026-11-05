@@ -1,5 +1,5 @@
 const PREFIX = `free-handpan-${new URL(self.registration.scope).pathname}-`;
-const CACHE = `${PREFIX}v2`;
+const CACHE = `${PREFIX}v3`;
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './icons/handpan.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',

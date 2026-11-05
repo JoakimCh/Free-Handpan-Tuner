@@ -125,6 +125,13 @@ export async function runAppTests(onResult = () => {}) {
   const appName = `Integration ${crypto.randomUUID().slice(0, 8)}`;
   const doc = () => frame.contentDocument;
   uiDocument = doc;
+  const navigate = async hash => {
+    await new Promise(resolve => {
+      frame.addEventListener('load', resolve, { once: true });
+      frame.src = `../index.html?integration=${crypto.randomUUID()}#${hash}`;
+    });
+    await waitFor(() => doc()?.documentElement.dataset.appReady === 'true', 'App navigation did not finish');
+  };
   const click = selector => {
     const button = doc().querySelector(selector);
     assert(button && !button.disabled, `Control unavailable ${selector}`);
@@ -198,7 +205,7 @@ export async function runAppTests(onResult = () => {}) {
       });
       report.status = 'final';
       const saved = await appStore.save('reports', report);
-      frame.src = `../index.html?integration=${crypto.randomUUID()}#report/${saved.id}`;
+      await navigate(`report/${saved.id}`);
       await waitFor(() => doc()?.querySelector('#compare-report'), 'Comparison picker missing');
       assert(doc().querySelector('tbody').textContent.includes('drift'), 'Per-field drift missing');
       frame.contentWindow.location.hash = `#history/${appProfile.id}`;
@@ -206,7 +213,7 @@ export async function runAppTests(onResult = () => {}) {
       assert(doc().querySelectorAll('.trend-point').length === 2, 'Trend omitted a measured report');
     });
     await test('Microphone start and stop use the real capture entry point', async () => {
-      frame.src = `../index.html?integration=${crypto.randomUUID()}#library`;
+      await navigate('library');
       await waitFor(() => doc()?.querySelector(`[data-action="check-instrument"][data-id="${appProfile.id}"]`), 'Handpan missing from collection');
       click(`[data-action="check-instrument"][data-id="${appProfile.id}"]`);
       await waitFor(() => doc().querySelector('[data-action="toggle-listen"]'), 'New check did not open');
