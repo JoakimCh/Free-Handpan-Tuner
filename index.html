@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#153e35">
+  <meta name="description" content="Discover your handpan’s notes, check its tuning, and follow changes over time. A free, private, offline handpan tuner.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Free Handpan Tuner</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/handpan.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./src/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#listen" aria-label="Free Handpan Tuner home">
+        <img src="./icons/handpan.svg" width="42" height="42" alt="">
+        <span>Free Handpan<span class="brand-sub">TUNER</span></span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#listen" data-nav="listen"><span aria-hidden="true">◉</span> Listen</a>
+        <a href="#library" data-nav="library"><span aria-hidden="true">◎</span> Handpans</a>
+        <a href="#history" data-nav="history"><span aria-hidden="true">↗</span> History</a>
+        <a href="#settings" data-nav="settings"><span aria-hidden="true">⚙</span> Settings</a>
+      </nav>
+      <div class="sidebar-foot"><span class="status-dot"></span><span id="offline-state">On-device analysis</span></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><span>Know your instrument.</span><button id="install" class="text-button" data-action="install">Install app <span aria-hidden="true">↗</span></button></header>
+      <div id="update-banner" class="notice" hidden>An update is ready. <button data-action="update">Save &amp; reload</button></div>
+      <div id="error" class="notice error" role="alert" hidden></div>
+      <main id="main" tabindex="-1"><p class="loading">Opening your handpans…</p></main>
+      <footer class="footer">Free Handpan Tuner <span>Made for listening closely.</span></footer>
+    </div>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <p id="announcement" class="sr-only" aria-live="polite"></p>
+  <noscript><p>This tuner needs JavaScript to analyze audio and open your saved reports.</p></noscript>
+</body>
+</html>

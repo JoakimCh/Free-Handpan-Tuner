@@ -156,6 +156,14 @@ function date(value) {
   return value;
 }
 
+function identifier(value) {
+  text(value, 'ID', 100);
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value) || ['constructor', 'prototype', '__proto__'].includes(value)) {
+    throw new Error('Invalid record identifier');
+  }
+  return value;
+}
+
 function field(value) {
   const targetMode = value.targetMode ?? (value.targetHz == null ? 'unknown' : 'hz');
   if (!['unknown', 'note', 'hz'].includes(targetMode)) throw new Error('Invalid target mode');
@@ -163,7 +171,7 @@ function field(value) {
   if (!Array.isArray(value.ratios) || value.ratios.length !== 2) throw new Error('Invalid partial ratios');
   const midi = number(value.midi, 'note', 0, 127);
   if (!Number.isInteger(midi)) throw new Error('Invalid note');
-  return { id: text(value.id, 'field ID', 100), label: text(value.label, 'field label', 100),
+  return { id: identifier(value.id), label: text(value.label, 'field label', 100),
     midi, side: value.side, position: text(value.position ?? '', 'position', 100),
     targetMode, targetHz: value.targetHz == null ? null : number(value.targetHz, 'target', 10, 20000),
     ratios: value.ratios.map(ratio => ratio == null ? null : number(ratio, 'partial ratio', 1.01, 10)),
@@ -178,7 +186,7 @@ function fields(values) {
 }
 
 function take(value) {
-  const result = { id: text(value.id, 'take ID', 100), capturedAt: date(value.capturedAt), status: 'measured',
+  const result = { id: identifier(value.id), capturedAt: date(value.capturedAt), status: 'measured',
     frequency: number(value.frequency, 'frequency', 10, 20000),
     spreadCents: number(value.spreadCents, 'spread', 0, 2400),
     periodicity: number(value.periodicity, 'periodicity', 0, 1),
@@ -198,7 +206,7 @@ function take(value) {
 }
 
 function record(value) {
-  return { id: text(value.id, 'ID', 100), revision: number(value.revision ?? 0, 'revision', 0, 1e9),
+  return { id: identifier(value.id), revision: number(value.revision ?? 0, 'revision', 0, 1e9),
     createdAt: date(value.createdAt), updatedAt: date(value.updatedAt ?? value.createdAt) };
 }
 
@@ -206,12 +214,12 @@ function instrument(value) {
   return { ...record(value), name: text(value.name, 'name', 100), maker: text(value.maker ?? '', 'maker', 100),
     scale: text(value.scale ?? '', 'scale', 100), reference: number(value.reference, 'reference', 300, 600),
     fields: fields(value.fields), notes: text(value.notes ?? '', 'instrument notes'), archived: Boolean(value.archived),
-    baselineId: value.baselineId == null ? null : text(value.baselineId, 'baseline', 100) };
+    baselineId: value.baselineId == null ? null : identifier(value.baselineId) };
 }
 
 function report(value) {
   if (!['draft', 'final'].includes(value.status)) throw new Error('Invalid report status');
-  const result = { ...record(value), instrumentId: value.instrumentId == null ? null : text(value.instrumentId, 'instrument ID', 100),
+  const result = { ...record(value), instrumentId: value.instrumentId == null ? null : identifier(value.instrumentId),
     instrumentName: text(value.instrumentName, 'instrument name', 100), status: value.status,
     reference: number(value.reference, 'reference', 300, 600), tolerance: number(value.tolerance, 'tolerance', 1, 100),
     margin: number(value.margin, 'comparison margin', 1, 100), analysisVersion: text(value.analysisVersion, 'analysis version', 40),
