@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handpan analysis tests</title>
+<style>
+  body { font: 1rem/1.5 system-ui, sans-serif; max-width: 65rem; margin: 2rem auto; padding: 0 1rem; }
+  button { font: inherit; padding: .6rem 1rem; }
+  li { margin: .5rem 0; }
+  .fail { color: #a31919; }
+</style>
+<h1>Handpan analysis tests</h1>
+<p>Render simulated strikes with Web Audio, then analyze their PCM samples. No microphone access or sound playback.</p>
+<button id="run">Run tests</button>
+<p id="summary" role="status">Ready.</p>
+<ol id="results"></ol>
+<script type="module">
+  import { runTests } from './analysis-tests.mjs';
+
+  const button = document.querySelector('#run');
+  const summary = document.querySelector('#summary');
+  const list = document.querySelector('#results');
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    list.replaceChildren();
+    summary.textContent = 'Running…';
+    document.documentElement.dataset.testStatus = 'running';
+    try {
+      if (!('OfflineAudioContext' in window)) throw new Error('OfflineAudioContext is unavailable in this browser');
+      const results = await runTests(result => {
+        const item = document.createElement('li');
+        item.className = result.passed ? 'pass' : 'fail';
+        item.textContent = `${result.passed ? 'PASS' : 'FAIL'} · ${result.name} · ${result.details}`;
+        list.append(item);
+      });
+      const failed = results.filter(result => !result.passed).length;
+      summary.textContent = `${results.length - failed}/${results.length} passed. ${failed} failed.`;
+      document.documentElement.dataset.testStatus = failed ? 'failed' : 'passed';
+    } catch (error) {
+      summary.textContent = `Tests could not complete. ${error.message}`;
+      document.documentElement.dataset.testStatus = 'failed';
+    } finally {
+      button.disabled = false;
+    }
+  });
+  if (new URLSearchParams(location.search).has('autorun')) button.click();
+</script>
+</html>
