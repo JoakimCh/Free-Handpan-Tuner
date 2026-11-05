@@ -1,6 +1,6 @@
 import { AudioCapture, audioError } from './audio.mjs';
 import { ANALYSIS_VERSION, DEFAULTS, addTake, attachInstrument, createField, createReport,
-  matchingFields, nearestNote, noteFrequency, resolveFields, summarize } from './model.mjs';
+  matchingFields, nearestNote, noteFrequency, resolveFields, sameInput, summarize } from './model.mjs';
 import { ConflictError, createBackup, openStore } from './storage.mjs';
 import { editorView, presetFields, readEditor } from './editor.mjs';
 import { h, listenView, libraryView, historyView, reportView, settingsView, textReport } from './views.mjs';
@@ -180,7 +180,7 @@ async function toggleListening() {
       if (attempt !== audioAttempt || !capture.running || currentRoute().page !== 'listen') return;
       try {
         const hasTakes = Object.values(state.draft.readings).some(value => value.takes.length);
-        if (hasTakes && (JSON.stringify(state.draft.input) !== JSON.stringify(input) || state.draft.analysisVersion !== ANALYSIS_VERSION)) {
+        if (hasTakes && (!sameInput(state.draft.input, input) || state.draft.analysisVersion !== ANALYSIS_VERSION)) {
           const instrument = state.instruments.find(item => item.id === state.draft.instrumentId);
           state.draft = createReport(instrument, state.settings);
           state.undo = [];

@@ -115,6 +115,19 @@ try {
         const screenshot = await command('Page.captureScreenshot', { format: 'png' }, sessionId);
         console.log(`SCREENSHOT_${label} ${screenshot.data}`);
       }
+      await command('Runtime.evaluate', { expression: `document.querySelector('[data-action="practice"]').click()`, userGesture: true }, sessionId);
+      await delay(300);
+      await command('Runtime.evaluate', { expression: `document.querySelector('[data-action="toggle-listen"]').click()`, userGesture: true }, sessionId);
+      await delay(1200);
+      await command('Runtime.evaluate', { expression: `document.querySelector('[data-action="play"][data-midi="50"]').click()`, userGesture: true }, sessionId);
+      await delay(1500);
+      await command('Runtime.evaluate', { expression: `document.querySelector('[data-action="toggle-listen"]').click()`, userGesture: true }, sessionId);
+      for (const [label, width, height] of [['tuner-desktop', 1440, 1000], ['tuner-phone', 390, 844]]) {
+        await command('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 640 }, sessionId);
+        await delay(100);
+        const screenshot = await command('Page.captureScreenshot', { format: 'png' }, sessionId);
+        console.log(`SCREENSHOT_${label} ${screenshot.data}`);
+      }
     }
   }
 } catch (error) {

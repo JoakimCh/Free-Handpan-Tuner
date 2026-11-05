@@ -253,6 +253,7 @@ function report(value) {
     if (!['microphone', 'practice'].includes(value.input.kind)) throw new Error('Invalid input kind');
     result.input = { kind: value.input.kind, sampleRate: number(value.input.sampleRate, 'sample rate', 8000, 192000),
       label: text(value.input.label ?? '', 'input label', 200),
+      ...(value.input.deviceId == null ? {} : { deviceId: text(value.input.deviceId, 'device ID', 300) }),
       echoCancellation: value.input.echoCancellation ?? null,
       noiseSuppression: value.input.noiseSuppression ?? null, autoGainControl: value.input.autoGainControl ?? null };
     for (const key of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) {

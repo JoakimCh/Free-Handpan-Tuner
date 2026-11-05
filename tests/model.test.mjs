@@ -8,7 +8,9 @@ function fixture() {
   const instrument = { id: crypto.randomUUID(), revision: 0, name: 'Test handpan', maker: '', scale: '',
     createdAt: new Date().toISOString(), reference: 440,
     fields: [createField(50, { side: 'ding', targetMode: 'note', targetHz: noteFrequency(50) })] };
-  return { instrument, field: instrument.fields[0], report: createReport(instrument) };
+  const report = createReport(instrument);
+  report.input = { kind: 'practice', sampleRate: 48000, label: 'Test source', deviceId: 'practice' };
+  return { instrument, field: instrument.fields[0], report };
 }
 
 function take(error, overrides = {}) {
@@ -55,6 +57,20 @@ test('Unknown targets still permit measuring drift', () => {
   const result = compareField(current, previous, field);
   assert.ok(Math.abs(result.drift - 7) < 1e-8);
   assert.equal(result.score, null);
+});
+
+test('Input comparison is independent of JSON key order and detects a different device', () => {
+  const { report, field } = fixture();
+  let previous = report;
+  let current = structuredClone(report);
+  for (let index = 0; index < 3; index++) {
+    previous = addTake(previous, field.id, take(-12));
+    current = addTake(current, field.id, take(-5));
+  }
+  current.input = Object.fromEntries(Object.entries(current.input).reverse());
+  assert.equal(compareField(current, previous, field).verdict, 'better');
+  current.input.deviceId = 'another-device';
+  assert.equal(compareField(current, previous, field).verdict, 'inconclusive');
 });
 
 test('Editing the reference preserves old report targets', () => {

@@ -2,6 +2,7 @@ import { addTake, createField, createReport, noteFrequency } from '../src/model.
 import { ConflictError, createBackup, openStore } from '../src/storage.mjs';
 import { analyzeHandpan, StrikeCollector } from '../src/strike-collector.mjs';
 import { simulateHandpan } from './simulate-handpan.mjs';
+import { AudioCapture } from '../src/audio.mjs';
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -59,6 +60,29 @@ export async function runAppTests(onResult = () => {}) {
     ] });
     const result = analyzeHandpan(audio.getChannelData(0), audio.sampleRate);
     assert(result.status === 'ambiguous', `Expected ambiguous, got ${result.status}`);
+  });
+  await test('A cancelled microphone request cannot close a newer audio session', async () => {
+    const devices = navigator.mediaDevices;
+    const original = devices.getUserMedia;
+    let resolvePermission;
+    devices.getUserMedia = () => new Promise(resolve => { resolvePermission = resolve; });
+    const capture = new AudioCapture(() => {}, () => {}, () => {});
+    const pending = capture.start('microphone').catch(error => error);
+    try {
+      await waitFor(() => resolvePermission, 'Permission request did not start');
+      const stopping = capture.stop();
+      const starting = capture.start('practice');
+      await stopping;
+      await starting;
+      resolvePermission(new MediaStream());
+      const error = await pending;
+      assert(error.name === 'AbortError', 'Older start was not cancelled');
+      assert(capture.running && capture.context?.state === 'running', 'Newer audio session was closed');
+    } finally {
+      devices.getUserMedia = original;
+      resolvePermission?.(new MediaStream());
+      await capture.stop();
+    }
   });
 
   const databaseName = `handpan-tests-${crypto.randomUUID()}`;
@@ -149,7 +173,7 @@ export async function runAppTests(onResult = () => {}) {
     const loaded = await test('Phone interface loads without horizontal overflow', async () => {
       await waitFor(() => doc()?.documentElement?.dataset.appReady === 'true', 'App did not open');
       assert(doc().documentElement.scrollWidth <= 392, 'App overflows a phone viewport');
-      assert(doc().querySelector('h1')?.textContent.includes('sound'), 'Welcome view missing');
+      assert(doc().querySelector('h1')?.textContent.includes('handpan'), 'Welcome view missing');
     });
     if (!loaded) return results;
     const captured = await test('Practice audio runs through AudioWorklet and saves a discovered field', async () => {
@@ -168,6 +192,7 @@ export async function runAppTests(onResult = () => {}) {
         await waitFor(() => doc().querySelector('.field-row')?.textContent.includes(`${repeat} strikes`), 'Repeat strike was not retained');
       }
       assert(doc().querySelectorAll('.field-row').length === 1, 'Repeats created duplicate fields');
+      assert(doc().documentElement.scrollWidth <= 392, 'Live tuner overflows a phone viewport');
       click('[data-action="toggle-listen"]');
       await waitFor(() => doc().querySelector('[data-action="toggle-listen"]')?.textContent.includes('Start'), 'Audio did not stop');
     });

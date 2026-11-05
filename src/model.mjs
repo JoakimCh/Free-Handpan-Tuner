@@ -111,7 +111,7 @@ export function compareField(current, previous, field) {
   const score = matchingTarget
     ? Math.abs(centsBetween(before.frequency, field.targetHz)) - Math.abs(centsBetween(now.frequency, field.targetHz))
     : null;
-  const inputMatches = JSON.stringify(current.input) === JSON.stringify(previous.input);
+  const inputMatches = sameInput(current.input, previous.input);
   const margin = Math.max(current.margin, previous.margin, now.spread, before.spread);
   let reason = '';
   if (!matchingTarget) reason = 'Target changed or unknown';
@@ -124,6 +124,11 @@ export function compareField(current, previous, field) {
     verdict = Math.abs(score) <= margin ? 'similar' : score > 0 ? 'better' : 'worse';
   }
   return { drift, score, verdict, reason, margin };
+}
+
+export function sameInput(left, right) {
+  const keys = ['kind', 'sampleRate', 'label', 'deviceId', 'echoCancellation', 'noiseSuppression', 'autoGainControl'];
+  return Boolean(left && right && keys.every(key => (left[key] ?? null) === (right[key] ?? null)));
 }
 
 export function recognitionMatches(report, instruments) {
@@ -165,7 +170,7 @@ export function reportSummary(report) {
 }
 
 export function serviceCandidates(current, previous) {
-  if (!previous || current.input?.kind !== 'microphone' || current.createdAt.slice(0, 10) === previous.createdAt.slice(0, 10)) return [];
+  if (!previous || current.input?.kind !== 'microphone') return [];
   return current.fields.filter(field => {
     const comparison = compareField(current, previous, field);
     const prior = previous.fields.find(item => item.id === field.id);

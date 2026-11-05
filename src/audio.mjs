@@ -34,12 +34,12 @@ export class AudioCapture {
           if (generation === this.generation) this.interrupt('The microphone disconnected. Start again to select an input.');
         };
         this.source = context.createMediaStreamSource(stream);
-        descriptor = { kind, sampleRate: context.sampleRate, label: track.label,
+        descriptor = { kind, sampleRate: context.sampleRate, label: track.label, deviceId: settings.deviceId ?? '',
           echoCancellation: settings.echoCancellation ?? null, noiseSuppression: settings.noiseSuppression ?? null,
           autoGainControl: settings.autoGainControl ?? null };
       } else {
         this.source = context.createGain();
-        descriptor = { kind: 'practice', sampleRate: context.sampleRate, label: 'Web Audio practice handpan',
+        descriptor = { kind: 'practice', sampleRate: context.sampleRate, label: 'Web Audio practice handpan', deviceId: 'practice',
           echoCancellation: null, noiseSuppression: null, autoGainControl: null };
       }
       await context.audioWorklet.addModule(new URL('./capture-worklet.mjs', import.meta.url));
@@ -60,6 +60,7 @@ export class AudioCapture {
         if (generation === this.generation) this.interrupt('Audio capture stopped. Please start again.');
       };
       this.worklet.port.onmessage = ({ data }) => {
+        if (generation !== this.generation) return;
         this.worker?.postMessage({ type: 'samples', samples: data }, [data.buffer]);
       };
       this.source.connect(this.worklet).connect(context.destination);
@@ -122,10 +123,11 @@ export class AudioCapture {
     this.source = null;
     this.wakeLock?.release().catch(() => {});
     this.wakeLock = null;
-    if (this.context) {
-      this.context.onstatechange = null;
-      await this.context.close().catch(() => {});
-      this.context = null;
+    const context = this.context;
+    this.context = null;
+    if (context) {
+      context.onstatechange = null;
+      await context.close().catch(() => {});
     }
   }
 }
